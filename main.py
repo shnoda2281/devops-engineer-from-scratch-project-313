@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 import logging
 import time
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger("app")
 
@@ -11,7 +12,7 @@ app = FastAPI()
 # --- CORS middleware для локальной разработки ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],           # в проде лучше ограничить
+    allow_origins=["*"],  # в проде лучше ограничить
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
