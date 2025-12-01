@@ -14,15 +14,18 @@ logger = logging.getLogger("app")
 SENTRY_DSN = os.getenv("SENTRY_DSN")
 
 # Инициализируем Sentry, ТОЛЬКО если DSN корректный
-# (локально SENTRY_DSN отсутствует → Sentry не включается → pytest не ломается)
+# (локально SENTRY_DSN обычно отсутствует → Sentry не включается → pytest не ломается)
 if SENTRY_DSN and SENTRY_DSN.startswith("http"):
     sentry_logging = LoggingIntegration(
-        level=logging.INFO,  # логи INFO в логгер
-        event_level=logging.ERROR,  # ошибки отправляем в Sentry
+        level=logging.INFO,        # какие логи писать в логгер
+        event_level=logging.ERROR, # какие отправлять в Sentry
     )
     sentry_sdk.init(
         dsn=SENTRY_DSN,
-        integrations=[FastApiIntegration(), sentry_logging],
+        integrations=[
+            FastApiIntegration(),
+            sentry_logging,
+        ],
         traces_sample_rate=1.0,
     )
 
@@ -65,5 +68,5 @@ def ping():
 # --- /error для теста Sentry ---
 @app.get("/error")
 def error():
-    # Эту ошибку увидишь в Sentry ТОЛЬКО на Render
+    # Эту ошибку увидишь в Sentry ТОЛЬКО на Render (где SENTRY_DSN задан)
     raise RuntimeError("Test error for Sentry")
