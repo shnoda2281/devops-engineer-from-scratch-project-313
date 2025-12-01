@@ -14,3 +14,13 @@
 
 ```bash
 make install
+
+## Развернутое приложение
+
+Приложение доступно по адресу:
+
+https://devops-engineer-from-scratch-project-313-5iro.onrender.com
+
+### Примеры запросов:
+- `GET /ping` → `"pong"`
+- `GET /error` → генерирует тестовую ошибку, отправляется в Sentry
