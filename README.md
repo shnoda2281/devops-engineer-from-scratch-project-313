@@ -2,6 +2,7 @@
 [![Actions Status](https://github.com/shnoda2281/devops-engineer-from-scratch-project-313/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/shnoda2281/devops-engineer-from-scratch-project-313/actions)
 # FastAPI приложение
 
+![CI](https://github.com/shnoda2281/devops-engineer-from-scratch-project-313/actions/workflows/ci.yml/badge.svg)
 Небольшое приложение на FastAPI для демонстрации базового запуска и настройки middleware.
 
 ## Требования
