@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.123.0",
     "fastapi-cli>=0.0.16",
+    "sentry-sdk>=2.46.0",
     "uvicorn[standard]>=0.38.0",
 ]
 
