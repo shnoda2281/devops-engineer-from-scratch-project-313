@@ -1,47 +1,44 @@
 import logging
 import os
-import time
 from typing import Optional
 
 import sentry_sdk
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
-# ----------------------------
-# Sentry
-# ----------------------------
+# ------------------------------------------------------------------------------
+# Логирование и Sentry
+# ------------------------------------------------------------------------------
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("app")
 
 SENTRY_DSN = os.getenv("SENTRY_DSN")
 if SENTRY_DSN:
-    sentry_logging = LoggingIntegration(
-        level=logging.INFO,
-        event_level=logging.ERROR,
-    )
+    sentry_logging = LoggingIntegration(level=logging.INFO, event_level=logging.ERROR)
     sentry_sdk.init(dsn=SENTRY_DSN, integrations=[sentry_logging])
 
-logger = logging.getLogger("app")
-
-
-# ----------------------------
-# DB
-# ----------------------------
+# ------------------------------------------------------------------------------
+# Настройки приложения и БД
+# ------------------------------------------------------------------------------
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./dev.db")
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8080")
+
 engine = create_engine(DATABASE_URL, echo=False)
 
 
-def get_db():
-    """Создаёт сессию БД и закрывает её после запроса."""
-    with Session(engine) as session:
-        yield session
+def build_short_url(short_name: str) -> str:
+    """Возвращает полный URL редиректа."""
+    return f"{BASE_URL}/r/{short_name}"
 
 
-# ----------------------------
-# Models
-# ----------------------------
+# ------------------------------------------------------------------------------
+# Модели
+# ------------------------------------------------------------------------------
 
 class LinkBase(SQLModel):
     original_url: str
@@ -49,6 +46,7 @@ class LinkBase(SQLModel):
 
 
 class Link(LinkBase, table=True):
+    """Таблица Link в базе данных."""
     __table_args__ = {"extend_existing": True}
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -68,81 +66,134 @@ class LinkRead(LinkBase):
     short_url: str
 
 
-# ----------------------------
-# App
-# ----------------------------
+# ------------------------------------------------------------------------------
+# Инициализация БД при старте
+# ------------------------------------------------------------------------------
 
 app = FastAPI()
+
+
+@app.on_event("startup")
+def on_startup():
+    SQLModel.metadata.create_all(engine)
+    logger.info("Database initialized")
+
+
+# ------------------------------------------------------------------------------
+# CORS
+# ------------------------------------------------------------------------------
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
-    allow_credentials=True,
 )
 
 
-# ----------------------------
-# Startup event
-# ----------------------------
+# ------------------------------------------------------------------------------
+# Работа с БД
+# ------------------------------------------------------------------------------
 
-@app.on_event("startup")
-def startup():
-    """Создание таблиц при запуске приложения."""
-    time.sleep(0.1)
-    SQLModel.metadata.create_all(engine)
+def get_db():
+    with Session(engine) as session:
+        yield session
 
 
-# ----------------------------
-# Healthcheck
-# ----------------------------
+# ------------------------------------------------------------------------------
+# Ping
+# ------------------------------------------------------------------------------
 
 @app.get("/ping")
 def ping():
     return "pong"
 
 
-# ----------------------------
-# Utils
-# ----------------------------
+# ------------------------------------------------------------------------------
+# Range-парсер
+# ------------------------------------------------------------------------------
 
-def build_short_url(short_name: str) -> str:
-    base = os.getenv("BASE_URL", "http://localhost:8000")
-    return f"{base}/r/{short_name}"
+def parse_range(value: str | None) -> tuple[int, int] | None:
+    """Парсит '[start,end]' → tuple(start, end)."""
+    if not value:
+        return None
+
+    try:
+        raw = value.strip()
+        if not raw.startswith("[") or not raw.endswith("]"):
+            return None
+
+        inner = raw[1:-1]
+        start_str, end_str = inner.split(",")
+
+        start = int(start_str.strip())
+        end = int(end_str.strip())
+
+        if start < 0 or end < start:
+            return None
+
+        return start, end
+    except Exception:
+        return None
 
 
-# ----------------------------
-# CRUD
-# ----------------------------
+# ------------------------------------------------------------------------------
+# CRUD + пагинация
+# ------------------------------------------------------------------------------
 
 @app.get("/api/links", response_model=list[LinkRead])
-def list_links(db: Session = Depends(get_db)):
-    items = db.exec(select(Link)).all()
+def list_links(
+    response: Response,
+    range: str | None = Query(default=None, alias="range"),
+    db: Session = Depends(get_db),
+):
+    total_rows = db.exec(select(Link)).all()
+    total = len(total_rows)
+
+    if total == 0:
+        response.headers["Content-Range"] = "links */0"
+        return []
+
+    parsed = parse_range(range)
+
+    if parsed:
+        start, requested_end = parsed
+        if start >= total:
+            response.headers["Content-Range"] = f"links */{total}"
+            return []
+
+        end = min(requested_end, total - 1)
+        limit = end - start + 1
+        rows = db.exec(select(Link).offset(start).limit(limit)).all()
+        end = start + len(rows) - 1
+    else:
+        start = 0
+        end = total - 1
+        rows = total_rows
+
+    response.headers["Content-Range"] = f"links {start}-{end}/{total}"
+
     return [
         LinkRead(
-            id=i.id,
-            original_url=i.original_url,
-            short_name=i.short_name,
-            short_url=build_short_url(i.short_name),
+            id=row.id,
+            original_url=row.original_url,
+            short_name=row.short_name,
+            short_url=build_short_url(row.short_name),
         )
-        for i in items
+        for row in rows
     ]
 
 
 @app.post("/api/links", response_model=LinkRead, status_code=201)
 def create_link(payload: LinkCreate, db: Session = Depends(get_db)):
-    exists = db.exec(
-        select(Link).where(Link.short_name == payload.short_name),
+    existing = db.exec(
+        select(Link).where(Link.short_name == payload.short_name)
     ).first()
 
-    if exists:
-        raise HTTPException(400, "short_name already exists")
+    if existing:
+        raise HTTPException(status_code=400, detail="short_name already exists")
 
-    link = Link(
-        original_url=payload.original_url,
-        short_name=payload.short_name,
-    )
+    link = Link(**payload.__dict__)
     db.add(link)
     db.commit()
     db.refresh(link)
@@ -159,7 +210,7 @@ def create_link(payload: LinkCreate, db: Session = Depends(get_db)):
 def get_link(link_id: int, db: Session = Depends(get_db)):
     link = db.get(Link, link_id)
     if not link:
-        raise HTTPException(404, "Link not found")
+        raise HTTPException(status_code=404, detail="Link not found")
 
     return LinkRead(
         id=link.id,
@@ -173,18 +224,18 @@ def get_link(link_id: int, db: Session = Depends(get_db)):
 def update_link(link_id: int, payload: LinkUpdate, db: Session = Depends(get_db)):
     link = db.get(Link, link_id)
     if not link:
-        raise HTTPException(404, "Link not found")
+        raise HTTPException(status_code=404, detail="Link not found")
 
     if payload.short_name and payload.short_name != link.short_name:
         conflict = db.exec(
-            select(Link).where(Link.short_name == payload.short_name),
+            select(Link).where(Link.short_name == payload.short_name)
         ).first()
         if conflict:
-            raise HTTPException(400, "short_name already exists")
+            raise HTTPException(status_code=400, detail="short_name already exists")
 
-    if payload.original_url is not None:
+    if payload.original_url:
         link.original_url = payload.original_url
-    if payload.short_name is not None:
+    if payload.short_name:
         link.short_name = payload.short_name
 
     db.add(link)
@@ -203,20 +254,16 @@ def update_link(link_id: int, payload: LinkUpdate, db: Session = Depends(get_db)
 def delete_link(link_id: int, db: Session = Depends(get_db)):
     link = db.get(Link, link_id)
     if not link:
-        raise HTTPException(404, "Link not found")
+        raise HTTPException(status_code=404, detail="Link not found")
 
     db.delete(link)
     db.commit()
-    return
 
 
 @app.get("/r/{short_name}")
 def redirect_short(short_name: str, db: Session = Depends(get_db)):
-    link = db.exec(
-        select(Link).where(Link.short_name == short_name),
-    ).first()
+    row = db.exec(select(Link).where(Link.short_name == short_name)).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Link not found")
 
-    if not link:
-        raise HTTPException(404, "Link not found")
-
-    return RedirectResponse(link.original_url)
+    return RedirectResponse(url=row.original_url)
