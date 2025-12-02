@@ -1,0 +1,21 @@
+{
+  "name": "url-shortener",
+  "version": "1.0.0",
+  "description": "Hexlet DevOps URL Shortener",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "frontend": "npx start-hexlet-devops-deploy-crud-frontend",
+    "backend": "uv run fastapi dev --host 0.0.0.0 --port 8080",
+    "dev": "concurrently -k -n frontend,backend \"npm run frontend\" \"npm run backend\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@hexlet/project-devops-deploy-crud-frontend": "^1.0.3"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
