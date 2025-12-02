@@ -3,7 +3,6 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-# Явно загружаем main.py как модуль
 ROOT_DIR = Path(__file__).resolve().parent.parent
 MAIN_PATH = ROOT_DIR / "main.py"
 
