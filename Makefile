@@ -1,7 +1,9 @@
-.PHONY: install dev run lint format test
+.PHONY: install setup dev run lint format test
 
-install:
+setup:
 	uv sync
+
+install: setup
 
 dev:
 	uv run fastapi dev --host 0.0.0.0 --port 8080

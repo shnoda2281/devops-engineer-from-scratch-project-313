@@ -1,6 +1,6 @@
 services:
   app:
-    image: python:3.12
+    build: .
     working_dir: /app
     volumes:
       - .:/app
