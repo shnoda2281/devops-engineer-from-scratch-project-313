@@ -1,20 +1,38 @@
 FROM python:3.12-slim
 
-ENV PYTHONUNBUFFERED=1
-WORKDIR /app
+# Неинтерактивный режим apt
+ENV DEBIAN_FRONTEND=noninteractive
 
+# Ставим nginx и системные зависимости
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends nginx make \
-    && pip install --no-cache-dir uv \
+    && apt-get install -y --no-install-recommends nginx curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir .
+# Обновляем pip и ставим uv (для управления зависимостями и тестов)
+RUN python -m pip install --no-cache-dir --upgrade pip \
+    && python -m pip install --no-cache-dir uv
 
+WORKDIR /app
+
+# Копируем файлы зависимостей отдельно — для кеширования слоёв
+COPY pyproject.toml uv.lock ./
+
+# Устанавливаем зависимости (создаст .venv внутри контейнера)
+RUN uv sync --frozen
+
+# Копируем всё приложение
 COPY . .
 
-COPY nginx.conf /etc/nginx/nginx.conf
+# Кладём наш конфиг nginx
+COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 
+# На всякий случай удалим дефолтный сайт nginx, если он есть
+RUN rm -f /etc/nginx/sites-enabled/default || true
+
+# Nginx будет слушать 80, Render пробрасывает PORT=80
+ENV PORT=80
 EXPOSE 80
 
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port 3000 & nginx -g 'daemon off;'"]
+# Стартуем backend на 8080 и nginx на 80
+CMD uv run fastapi run main:app --host 0.0.0.0 --port 8080 & \
+    nginx -g 'daemon off;'
