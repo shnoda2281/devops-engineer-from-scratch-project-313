@@ -3,7 +3,7 @@ name = "devops-engineer-from-scratch-project-313"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.123.0",
     "fastapi-cli>=0.0.16",
