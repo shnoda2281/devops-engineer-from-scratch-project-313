@@ -3,36 +3,40 @@ FROM python:3.14-slim
 # Неинтерактивный режим apt
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Ставим nginx, curl и make (make нужен для docker compose run app make ...)
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends nginx curl make \
-    && rm -rf /var/lib/apt/lists/*
-
-# Обновляем pip и ставим uv
-RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir uv
+# Ставим системные зависимости
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nginx \
+    curl \
+    make \
+    ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# Обновляем pip и ставим uv
+RUN python -m pip install --upgrade pip \
+ && python -m pip install uv
 
 # Копируем файлы зависимостей отдельно — для кеша
 COPY pyproject.toml uv.lock ./
 
-# Установим зависимости (создаст .venv внутри контейнера)
-RUN uv sync --frozen
+# ⚠️ ВАЖНО:
+# Устанавливаем зависимости В СИСТЕМУ, БЕЗ virtualenv
+RUN uv sync --system --frozen
 
-# Копируем всё приложение
+# Копируем приложение
 COPY . .
 
-# Кладём наш конфиг nginx
+# Конфиг nginx
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 
-# На всякий случай удалим дефолтный сайт nginx, если он есть
+# Удаляем дефолтный сайт nginx
 RUN rm -f /etc/nginx/sites-enabled/default || true
 
-# Nginx слушает 80, Render пробрасывает PORT=80
+# Render / prod
 ENV PORT=80
 EXPOSE 80
 
-# Стартуем backend на 8080 и nginx на 80
+# Запуск backend + nginx
 CMD uv run fastapi run main:app --host 0.0.0.0 --port 8080 & \
     nginx -g 'daemon off;'
