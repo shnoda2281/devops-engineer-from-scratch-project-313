@@ -1,30 +1,24 @@
-.PHONY: setup install dev run lint format test
+.PHONY: install dev run lint format test setup
 
-# Установка uv (если его нет) и зависимостей проекта
+# Hexlet вызывает именно ЭТО
+# В контейнерах и CI virtualenv НЕ нужен
 setup:
-	python -m pip install --upgrade pip
-	python -m pip install uv
-	uv sync --frozen
+	uv sync --system --no-cache
 
-# Алиас (Hexlet иногда вызывает install)
+# Локальная установка (аналогично)
 install: setup
 
-# Запуск приложения для разработки
 dev:
 	uv run fastapi dev --host 0.0.0.0 --port 8080
 
-# Запуск приложения (то же самое, но без "dev"-алиаса)
 run:
-	uv run fastapi dev --host 0.0.0.0 --port 8080
+	uv run fastapi run main:app --host 0.0.0.0 --port 8080
 
-# Запуск линтера
 lint:
 	uv run ruff check .
 
-# Автоформатирование
 format:
 	uv run ruff format .
 
-# Запуск тестов
 test:
 	uv run pytest
