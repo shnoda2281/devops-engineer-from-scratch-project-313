@@ -1,20 +1,14 @@
-SHELL := /bin/sh
+SHELL := /bin/bash
 
-.PHONY: setup install lint test format run
+.PHONY: setup lint test
 
+# ВАЖНО: --system = ставим зависимости в системный python контейнера
+# --frozen = требуем актуальный lock (uv.lock). Если lock ещё нет — временно убери --frozen.
 setup:
-	cd code && UV_PYTHON_DOWNLOADS=never UV_SYSTEM_PYTHON=1 uv sync --system --frozen
-
-install: setup
+	cd code && UV_SYSTEM_PYTHON=1 UV_PYTHON_DOWNLOADS=never uv sync --system --frozen
 
 lint:
-	uv run --system ruff check .
+	cd code && uv run ruff check .
 
 test:
-	uv run --system pytest -q
-
-format:
-	uv run --system ruff format .
-
-run:
-	uv run --system fastapi run main:app --host 0.0.0.0 --port 8080
+	cd code && uv run pytest -q
