@@ -14,14 +14,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python (3.14)
         uses: actions/setup-python@v5
         with:
           python-version-file: ".python-version"
           check-latest: true
 
       - name: Show Python version
-        run: python -V
+        run: |
+          which python
+          python -V
+          python -c "import sys; print(sys.executable)"
 
       - name: Install uv
         run: |
@@ -33,15 +36,20 @@ jobs:
         with:
           path: |
             ~/.cache/uv
+            .venv
           key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
           restore-keys: |
             ${{ runner.os }}-uv-
 
-      - name: Install dependencies
-        run: uv sync
+      - name: Install dependencies (strict lock, no Python downloads)
+        env:
+          UV_PYTHON_DOWNLOADS: never
+        run: |
+          UV_PY="$(python -c 'import sys; print(sys.executable)')"
+          uv sync --frozen --python "$UV_PY"
 
       - name: Run Ruff (lint)
         run: uv run ruff check .
 
       - name: Run tests
-        run: uv run pytest
+        run: uv run pytest -q
