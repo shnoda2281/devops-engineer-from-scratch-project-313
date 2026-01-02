@@ -1,42 +1,37 @@
 FROM python:3.14-slim
 
-# Неинтерактивный режим apt
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-# Ставим системные зависимости
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    nginx \
-    curl \
-    make \
-    ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+# Системные зависимости
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        nginx \
+        curl \
+        make \
+    && rm -rf /var/lib/apt/lists/*
+
+# Устанавливаем uv
+RUN pip install --no-cache-dir uv
 
 WORKDIR /app
 
-# Обновляем pip и ставим uv
-RUN python -m pip install --upgrade pip \
- && python -m pip install uv
-
-# Копируем файлы зависимостей отдельно — для кеша
+# Копируем файлы зависимостей отдельно (кеш слоёв)
 COPY pyproject.toml uv.lock ./
 
-# ⚠️ ВАЖНО:
-# Устанавливаем зависимости В СИСТЕМУ, БЕЗ virtualenv
-RUN uv sync --system --frozen
+# Установка зависимостей БЕЗ virtualenv (важно для CI/Hexlet)
+RUN uv sync --frozen --no-venv
 
-# Копируем приложение
+# Копируем весь проект
 COPY . .
 
-# Конфиг nginx
+# Nginx config
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
-
-# Удаляем дефолтный сайт nginx
 RUN rm -f /etc/nginx/sites-enabled/default || true
 
-# Render / prod
-ENV PORT=80
 EXPOSE 80
 
-# Запуск backend + nginx
+# Backend на 8080, nginx на 80
 CMD uv run fastapi run main:app --host 0.0.0.0 --port 8080 & \
     nginx -g 'daemon off;'
