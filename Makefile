@@ -3,7 +3,7 @@ SHELL := /bin/bash
 .PHONY: setup lint test
 
 setup:
-	UV_PYTHON_DOWNLOADS=never uv sync --frozen --python python3.14
+	UV_SYSTEM_PYTHON=1 UV_PYTHON_DOWNLOADS=never uv sync --system --frozen
 
 lint:
 	uv run ruff check .
