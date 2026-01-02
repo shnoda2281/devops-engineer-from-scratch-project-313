@@ -1,23 +1,30 @@
-.PHONY: install dev run lint format test setup
+.PHONY: setup install dev run lint format test
 
-# То, что будет вызываться в hexlet-check через docker compose run app make setup
+# Установка uv (если его нет) и зависимостей проекта
 setup:
-	uv sync
+	python -m pip install --upgrade pip
+	python -m pip install uv
+	uv sync --frozen
 
-# Локальная установка зависимостей
+# Алиас (Hexlet иногда вызывает install)
 install: setup
 
+# Запуск приложения для разработки
 dev:
 	uv run fastapi dev --host 0.0.0.0 --port 8080
 
+# Запуск приложения (то же самое, но без "dev"-алиаса)
 run:
 	uv run fastapi dev --host 0.0.0.0 --port 8080
 
+# Запуск линтера
 lint:
 	uv run ruff check .
 
+# Автоформатирование
 format:
 	uv run ruff format .
 
+# Запуск тестов
 test:
 	uv run pytest
