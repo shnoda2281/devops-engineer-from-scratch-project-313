@@ -1,11 +1,10 @@
-.PHONY: install dev run lint format test setup
+.PHONY: setup install dev run lint format test check
 
-# Hexlet вызывает именно ЭТО
-# В контейнерах и CI virtualenv НЕ нужен
+# Hexlet вызывает именно: docker compose run app make setup
+# В CI/контейнере venv не нужен
 setup:
-	uv sync --system --no-cache
+	UV_PYTHON_DOWNLOADS=never uv sync --system --frozen
 
-# Локальная установка (аналогично)
 install: setup
 
 dev:
@@ -21,4 +20,6 @@ format:
 	uv run ruff format .
 
 test:
-	uv run pytest
+	PYTHONPATH=. uv run pytest -q
+
+check: lint test

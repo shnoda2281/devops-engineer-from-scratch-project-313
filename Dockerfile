@@ -1,30 +1,26 @@
-FROM python:3.14-slim
+FROM python:3.14-alpine
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+# системные пакеты (добавь что надо под твои либы)
+RUN apk add --no-cache \
+    build-base curl git bash make nodejs npm
 
-# Минимум системных зависимостей
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates make \
-    && rm -rf /var/lib/apt/lists/*
+# uv бинарники
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-WORKDIR /app
+WORKDIR /project
 
-# Устанавливаем uv
-RUN python -m pip install --no-cache-dir --upgrade pip \
-    && python -m pip install --no-cache-dir uv
-
-# Зависимости отдельно — для кеша
+# быстрее кешится
 COPY pyproject.toml uv.lock ./
 
-# ВАЖНО: без virtualenv
-RUN uv sync --no-venv --frozen
+# запретить uv скачивать питон
+ENV UV_PYTHON_DOWNLOADS=never
 
-# Код приложения
+# поставить зависимости в system (без venv)
+RUN uv sync --system --frozen
+
+# остальное
 COPY . .
 
-ENV PYTHONPATH=/app
 EXPOSE 8080
 
-CMD ["sh", "-c", "uv run uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["uv", "run", "fastapi", "run", "main:app", "--host", "0.0.0.0", "--port", "8080"]
